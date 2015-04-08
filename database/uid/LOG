@@ -1,0 +1,16 @@
+=============== Apr 8, 2015 (BST) ===============
+03:09:24.150653 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+03:09:24.157508 db@open opening
+03:09:24.157740 journal@recovery F·1
+03:09:24.160794 journal@recovery recovering @28
+03:09:24.185904 mem@flush created L0@30 N·22 S·368B "ale..ang,v162":"wil..ang,v174"
+03:09:24.191882 db@janitor F·7 G·0
+03:09:24.191997 db@open done T·34.394342ms
+03:09:24.192319 table@compaction L0·4 -> L1·1 S·1KiB Q·184
+03:09:24.212339 table@build created L1@33 N·12 S·279B "ale..ang,v162":"wil..ang,v174"
+03:09:24.229519 table@compaction committed F-4 S-1KiB Ke·0 D·88 T·35.632522ms
+03:09:24.229719 table@remove removed @30
+03:09:24.229867 table@remove removed @27
+03:09:24.230005 table@remove removed @24
+03:09:24.230141 table@remove removed @21
+03:09:24.230275 table@remove removed @20

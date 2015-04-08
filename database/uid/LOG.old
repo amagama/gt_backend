@@ -1,0 +1,8 @@
+=============== Apr 8, 2015 (BST) ===============
+03:07:59.702397 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+03:07:59.704214 db@open opening
+03:07:59.704445 journal@recovery F·1
+03:07:59.708391 journal@recovery recovering @25
+03:07:59.718415 mem@flush created L0@27 N·22 S·368B "ale..ang,v139":"wil..ang,v151"
+03:07:59.719661 db@janitor F·6 G·0
+03:07:59.719742 db@open done T·15.433875ms

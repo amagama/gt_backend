@@ -8,30 +8,38 @@ import (
 		"encoding/json"
 		"io/ioutil"
 		"net/http"
-		"strconv"
+		//"strconv"
 		"fmt"
 		)
 
+const (
+		profiles_db = "pfd"
+		tags_index_db = "tid"
+		user_index_db = "uid"
+		)
+
+type User map[string]string
 type Profile map[string]string
 
 var app *ctrl.Ctrl
 
+var tempUsers []User
+
 func main() {
 	
-	app = ctrl.Start(false, []string{"profiles", "tags"})
+	app = ctrl.Start(false, []string{profiles_db, tags_index_db, user_index_db})
 
-	ok, num := app.Get("entities", "storedObjects"); if !ok { app.Err("GET FAILED"); app.KillProgram(nil) }
-	fmt.Println("storedObjects", string(num))
+	tempUsers = []User{}
+	NewUsers([]string{"alex","dave","clive","paul","ben","mark","william","chantelle","lucy","carol","jane"})
+	// server
 
 	router := httprouter.New()
 	
 	// profiles
-	router.GET("/profiles/:username", profilesGetHandler)
-	router.POST("/profiles/:username", profilesPostHandler)
-	
-	// tags
-	router.GET("/tags/:tagname", tagsGetHandler)
-	router.POST("/tags/:tagname", tagsPostHandler)
+	router.GET("/profile/:username", profilesGetHandler)
+	router.POST("/profile/:tagname", profilesPostHandler)
+
+	router.GET("/profiles/:tags", profilesSearchHandler)
 
 	host := "leadinglocally.cryptoapi.info"
 	port := ":443"
@@ -41,6 +49,20 @@ func main() {
 	app.Log(host+" Listening on port "+port)
 
 	panic(http.Serve(ctrl.NewTLSListener(port, cert, key), router))
+}
+
+func NewUsers(names []string) bool {
+	for _, username := range names {
+		u := make(map[string]string)
+		u["username"] = username
+		u["name"] = "Random Username"
+		u["title"] = "This is my default title string!"
+		u["description"] = "blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah "
+		b, err := json.Marshal(u); if err != nil { return app.LogErr("NewUsers", err) }
+		app.Send(profiles_db, username, b)
+		AddUserTag(username, "golang")
+	}
+	return true
 }
 
 // string tools
@@ -57,12 +79,53 @@ func UsernameExists(u string) bool {
 
 // handlers
 
-func ValidLength(i int, s string) (bool, string) {
-	l := len(s)
-	if l > 0 && l <= i {
-		if len(strings.Replace(s, " ", "", -1)) > 3 { return true, Sanitize(s) }
+func ValidLength(i int, s string) (bool, string) { l := len(s); if l > 0 && l <= i { if len(strings.Replace(s, " ", "", -1)) > 3 { return true, Sanitize(s) } }; return false, "" }
+
+func GetProfile(id string) (bool, Profile) {
+	ok, p := app.Get(profiles_db, id)
+	for ok {
+		var np Profile
+		err := json.Unmarshal(p, &np); if err != nil { app.LogErr("GetProfile", err); break }
+		return true, np
 	}
-	return false, ""
+	return false, nil
+}
+
+type QIndex map[string]bool
+
+func profilesSearchHandler(res http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	mem := []QIndex{}
+	tags := strings.Split(p.ByName("tags"), "-")
+	
+	for _, tag := range tags {
+		app.Log("TAG: "+tag)
+		index := make(QIndex)
+		ok, list := GetAssociated(tags_index_db, tag)
+		app.DebugJSON(list)
+		if ok { for _, username := range list { index[username] = true } }
+		mem = append(mem, index)
+	}
+
+	if len(mem) > 1 {
+		for k, _ := range mem[0] {
+			for _, userMap := range mem[1:] { if !userMap[k] { delete(mem[0], k) } }
+		}
+	}
+
+	out := "["
+
+	app.DebugJSON(mem[0])
+
+	for id, _ := range mem[0] {
+		ok, p := app.Get(profiles_db, id)
+		if ok {
+			out += string(p)+","
+		}
+	}
+
+	fmt.Fprintf(res, out+"null]")
+
+	return
 }
 
 func profilesGetHandler(res http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -103,7 +166,7 @@ func profilesPostHandler(res http.ResponseWriter, r *http.Request, p httprouter.
 
 		newProfile, err := json.Marshal(np); if err != nil { app.LogErr(thisFunc, err); break }
 
-		if !app.Send("profiles", username, newProfile) { app.LogErr(thisFunc, err); break }
+		if !app.Send(profiles_db, username, newProfile) { app.LogErr(thisFunc, err); break }
 
 		return
 
@@ -112,40 +175,30 @@ func profilesPostHandler(res http.ResponseWriter, r *http.Request, p httprouter.
 	app.HttpError(res, msg, code)
 }
 
-func tagsGetHandler(res http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	thisFunc := "tagsGetHandler"
-	res.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 
+func AddUserTag(userName, tagName string) {
+	value := []byte("X")
+	app.Send(tags_index_db, tagName+"_"+userName, value)
+	app.Send(user_index_db, userName+"_"+tagName, value)
+}
+
+func RemoveUserTag(userName, tagName string) {
+	app.Delete(tags_index_db, tagName+"_"+userName)
+	app.Delete(user_index_db, userName+"_"+tagName)
+}
+
+func GetAssociated(index, id string) (bool, []string) {
+	app.Log("ASSOC: "+index+" "+id)
 	for {
-		searchTerm := []byte(Clean(p.ByName("tagname")))
-		quantity, err := strconv.Atoi(p.ByName("quantity")); if !app.ChkErr(thisFunc, err) { break }
-
-		iter := app.LevelDB("tags").NewIterator(util.BytesPrefix(searchTerm), nil)
-		i := 0
-
-		bk := "\","
-		out := "["
-
-		for iter.Next() && i < quantity {
-			out += "\""+string(iter.Value())+bk
-			i++
-		}
-		fmt.Fprintf(res, out+"\"\"]")
-
+		list := []string{}
+		iter := app.LevelDB(index).NewIterator(util.BytesPrefix([]byte(id+"_")), nil)
+		for iter.Next() { list = append(list, strings.Split(string(iter.Key()), "_")[1]) }
 		iter.Release()
-		if !app.ChkErr(thisFunc, iter.Error()) { break }
-		return
-	}
-	// send http error response code
-	app.HttpError(res, "SEARCH REQUEST FAILED", 400)
+		if !app.ChkErr("GetAssociated", iter.Error()) { break }
+		return true, list
+	}	
+	return false, nil
 }
-
-func tagsPostHandler(res http.ResponseWriter, r *http.Request, p httprouter.Params) {
-}
-
-
-
-
 
 
 
