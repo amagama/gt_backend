@@ -41,14 +41,7 @@ func main() {
 
 	router.GET("/profiles/:tags", profilesSearchHandler)
 
-	host := "leadinglocally.cryptoapi.info"
-	port := ":443"
-
-	cert, key := app.UseCertificates(host)
-
-	app.Log(host+" Listening on port "+port)
-
-	panic(http.Serve(ctrl.NewTLSListener(port, cert, key), router))
+	panic(http.ListenAndServe(":80", router))
 }
 
 func NewUsers(names []string) bool {
